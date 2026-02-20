@@ -1,0 +1,92 @@
+---
+title: Hybrid Identity Architecture — On-Premises AD to Microsoft Entra ID
+---
+
+flowchart TD
+    subgraph OnPrem["On-Premises Data Center"]
+        direction TB
+        DC["Windows Server 2022\nDomain Controller\nfresnolab.local\n\nDNS: 192.168.1.1\nDHCP: 192.168.1.0/24"]
+
+        subgraph OU["Active Directory OU Structure"]
+            direction TB
+            ROOT["DC=fresnolab,DC=local"]
+            ROOT --> USERS_OU["OU=Users"]
+            ROOT --> COMPUTERS_OU["OU=Computers"]
+            ROOT --> GROUPS_OU["OU=Security Groups"]
+            ROOT --> SERVERS_OU["OU=Servers"]
+
+            USERS_OU --> STAFF_OU["OU=Staff"]
+            USERS_OU --> ADMIN_OU["OU=Admins"]
+            USERS_OU --> SVC_OU["OU=Service Accounts"]
+
+            COMPUTERS_OU --> LAPTOPS_OU["OU=Laptops"]
+            COMPUTERS_OU --> DESKTOPS_OU["OU=Desktops"]
+        end
+
+        DC -->|"manages"| OU
+
+        subgraph GPO["Group Policy Objects"]
+            GPO1["GPO: BitLocker-Enforce"]
+            GPO2["GPO: Password-Policy-v3"]
+            GPO3["GPO: Software-Restrictions"]
+            GPO4["GPO: Windows-Update-WSUS"]
+        end
+
+        DC -->|"applies"| GPO
+
+        CONNECT["Azure AD Connect\nSync Engine v2.x\n\nSync Interval: 30 min\nFiltered Sync: Enabled\nPassword Hash Sync: ON\nSeamless SSO: ON"]
+
+        DC <-->|"LDAP / Kerberos"| CONNECT
+    end
+
+    subgraph Cloud["Microsoft Azure -- Cloud Identity"]
+        direction TB
+        ENTRA["Microsoft Entra ID\n(Azure Active Directory)\nTenant: fresnolab.onmicrosoft.com"]
+
+        subgraph EntraFeatures["Entra ID Services"]
+            CA["Conditional Access\nPolicies"]
+            MFA["Multi-Factor\nAuthentication (MFA)"]
+            PIM["Privileged Identity\nManagement (PIM)"]
+            SSO["Enterprise App\nSingle Sign-On"]
+        end
+
+        ENTRA --- EntraFeatures
+
+        subgraph M365["Microsoft 365 Services"]
+            EXO["Exchange Online\n(Email)"]
+            TEAMS["Microsoft Teams"]
+            SP["SharePoint Online"]
+            INTUNE["Microsoft Intune\n(Endpoint Management)"]
+        end
+
+        ENTRA -->|"authenticates"| M365
+    end
+
+    subgraph Devices["End-User Devices"]
+        HD["Hybrid Joined Workstations\nAD + Entra ID"]
+        BYOD["Entra ID Registered\nBYOD / Remote Devices"]
+        MOBILE["Mobile Devices\n(iOS / Android)\nManaged by Intune"]
+    end
+
+    %% Core sync flow
+    CONNECT <-->|"HTTPS / TLS\nIdentity Sync\n(Users, Groups, Passwords)"| ENTRA
+
+    %% Device authentication flows
+    HD <-->|"Kerberos (on-prem)\nPRT Token (cloud)"| DC
+    HD <-->|"Hybrid Join\nAuthentication"| ENTRA
+    BYOD <-->|"OAuth 2.0 / OIDC"| ENTRA
+    MOBILE <-->|"MDM Enrollment\nIntune Policy"| INTUNE
+
+    %% Internet boundary
+    OnPrem <-->|"Encrypted Sync Channel\n(Port 443 outbound only)"| Cloud
+
+    %% Style
+    classDef onprem fill:#1a3a5c,stroke:#4a9ede,color:#ffffff
+    classDef cloud fill:#1e3a1e,stroke:#5cb85c,color:#ffffff
+    classDef sync fill:#4a2c5c,stroke:#9b59b6,color:#ffffff
+    classDef device fill:#3a2a1a,stroke:#e67e22,color:#ffffff
+
+    class DC,OU,GPO onprem
+    class ENTRA,EntraFeatures,M365 cloud
+    class CONNECT sync
+    class Devices,HD,BYOD,MOBILE device

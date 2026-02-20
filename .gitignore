@@ -1,0 +1,21 @@
+# Generated output files — created at runtime, not part of the repo
+*.log
+quarantine_blocklist.txt
+report.json
+
+# Terraform — never commit real variable values or state
+terraform.tfvars
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+
+# Credential artifacts
+temp_credentials_*.txt
+
+# OS and editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+*.swp
